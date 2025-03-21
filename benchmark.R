@@ -21,7 +21,7 @@ batchExport(list(
 # The algorithm should return the total runtime needed for training, the SD, but also the performance of the training losses so we know it is all working
 addProblem("runtime_train",
   data = NULL,
-  fun = function(epochs, batch_size, n_layers, latent, n, p, optimizer, device,  cuda_allocator_reserved_rate, ...) {
+  fun = function(epochs, batch_size, n_layers, latent, n, p, optimizer, device, ...) {
     problem = list(
       epochs = assert_int(epochs),
       batch_size = assert_int(batch_size),
@@ -29,7 +29,6 @@ addProblem("runtime_train",
       latent = assert_int(latent),
       n = assert_int(n),
       p = assert_int(p),
-      optimizer = assert_choice(optimizer, c("adamw")),
       device = assert_choice(device, c("cuda", "cpu"))
     )
 
@@ -38,7 +37,6 @@ addProblem("runtime_train",
 )
 
 # pytorch needs to be submitted with an active pytorch environment
-# as I otherwise get the: OSError: libmkl_intel_lp64.so.2: cannot open shared object file: 
 addAlgorithm("pytorch",
   fun = function(instance, job, data, ...) {
     f = function(...) {
@@ -46,12 +44,10 @@ addAlgorithm("pytorch",
       reticulate::source_python("~/torchbench/time_pytorch.py")
       time_pytorch(...)
     }
-    #do.call(f, args = c(instance, list(seed = job$seed)))
     callr::r(f, args = c(instance, list(seed = job$seed)))
   }
 )
 
-# type can be: "base", "torchoptx", "torchoptx_jit", "ignite", and "mlr3torch_ignite" and indicates how the model is fit.
 addAlgorithm("rtorch",
   fun = function(instance, job, type, ...) {
     assert_choice(type, c("jit", "standard"))
@@ -63,13 +59,13 @@ addAlgorithm("rtorch",
 problem_design = expand.grid(list(
   n          = 2000L,
   p          = 1000L,
-  optimizer = c("adamw"),
   # training parameters
-  epochs = 5L,
-  latent = 500L,
+  epochs = 20L,
+  latent = c(30, 300, 3000L),
   batch_size = 32L,
   device     = "cuda",
-  n_layers = c(8L, 16L, 32L)
+  n_layers = c(1L, 4L, 16L, 32L, 64L)
+  #n_layers = 2L
 ), stringsAsFactors = FALSE)
 
 addExperiments(
@@ -112,3 +108,13 @@ get_losses = function() {
   lapply(findDone()[[1]], function(i) loadResult(i)$losses)
 }
 
+
+
+summarize = function() {
+  jt = getJobTable() |> unwrap()
+  times = get_times()
+  jt = jt[, c("n_layers", "type")]
+  jt$time = times
+  jt$type[is.na(jt$type)] = "pytorch"
+  return(jt)
+}

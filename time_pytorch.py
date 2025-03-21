@@ -5,7 +5,7 @@ from torch import nn
 import numpy as np
 
 # 3. Define the timing function
-def time_pytorch(epochs, batch_size, n_layers, latent, n, p, optimizer, device, seed):
+def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed):
     torch.manual_seed(seed)
     # 2. Define a function to create the neural network
     def make_network(p, latent, n_layers):
@@ -25,9 +25,6 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, optimizer, device, 
     # Create the network
     net = make_network(p, latent, n_layers)
     net.to(device)
-
-    # JIT trace the module
-    net = torch.jit.script(net)
 
     # Define optimizer and loss function
     optimizer = torch.optim.Adam(net.parameters(), lr = 0.001)
@@ -65,4 +62,4 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, optimizer, device, 
 
 
 if __name__ == "__main__":
-    print(time_pytorch(epochs=10, batch_size=32, n_layers=16, latent=100, n=2000, p=1000, optimizer='adamw', device='cuda', seed=42))
+    print(time_pytorch(epochs=10, batch_size=32, n_layers=16, latent=100, n=2000, p=1000, device='cuda', seed=42))

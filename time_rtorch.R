@@ -1,4 +1,4 @@
-time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, optimizer, device, type, seed) {
+time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, device, type, seed) {
   library(torch)
   #library(mlr3torch)
   torch_manual_seed(seed)
@@ -22,15 +22,10 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, optimizer, de
   net = make_network(p, latent, n_layers)
   net$to(device = device)
 
-  opt_class = switch(optimizer,
-    adamw = torch::optim_ignite_adamw,
-    sgd = torch::optim_ignite_sgd
-  )
-
-  opt = opt_class(net$parameters, lr = 0.001)
+  opt = optim_ignite_adamw(net$parameters, lr = 0.001, weight_decay = 0.01, betas = c(0.9, 0.999), amsgrad = FALSE)
 
   if (do_jit) {
-    net = jit_trace(net, torch_randn(1, p, device = device))$.__enclos_env__$private$find_method("trainforward")
+    net = jit_trace(net, torch_randn(1, p, device = device), respect_mode = TRUE)$.__enclos_env__$private$find_method("trainforward")
   }
 
   loss_fn = nn_mse_loss()
@@ -111,6 +106,7 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, optimizer, de
 
   t0 = Sys.time()
   losses = train_run()
+  cuda_synchronize()
   t = as.numeric(difftime(Sys.time(), t0, units = "secs"))
 
   list(time = t, losses = losses)
@@ -126,7 +122,6 @@ if (FALSE) {
         latent = 1,
         n = 1,
         p = 1,
-        optimizer = "adamw",
         device = "cpu",
         seed = 1
     )
