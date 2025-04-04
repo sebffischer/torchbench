@@ -27,8 +27,14 @@ jobs:
           cd website
           quarto render
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Deploy
+        if: ${{ github.event_name == 'push' }}
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./website/_site
+          token: ${{ secrets.GITHUB_TOKEN }}
+          git-config-name: sebffischer
+          git-config-email: <>
+          commit-message: 'deploy website'
+          branch: gh-pages
+          folder: website/_site
+          single-commit: true
