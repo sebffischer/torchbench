@@ -206,10 +206,9 @@ get_result = function(ids, what) {
 summarize = function(ids = NULL) {
   jt = getJobTable() |> unwrap()
   if (!is.null(ids)) jt = jt[ids, ]
-  jt = jt[, c("n_layers", "jit", "optimizer", "batch_size", "device", "opt_type", "algorithm", "repl")]
+  jt = jt[, c("n_layers", "jit", "optimizer", "batch_size", "device", "opt_type", "algorithm", "repl", "tag")]
   jt$time = get_result(ids, "time")
   jt$loss = get_result(ids, "loss")
   jt$memory = get_result(ids, "memory") / 2^30
-  jt$gc_time = get_result(ids, "gc_time")
   return(jt)
 }
