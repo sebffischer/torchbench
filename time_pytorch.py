@@ -5,8 +5,13 @@ from torch import nn
 import numpy as np
 
 # 3. Define the timing function
-def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed):
+def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed, optimizer, jit):
     torch.manual_seed(seed)
+    torch.set_num_threads(1)
+    # convert latentn, n_layers to int
+    latent = int(latent)
+    n_layers = int(n_layers)
+    p = int(p)
     # 2. Define a function to create the neural network
     def make_network(p, latent, n_layers):
         layers = [nn.Linear(p, latent), nn.ReLU()]
@@ -14,21 +19,38 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed):
             layers.append(nn.Linear(latent, latent))
             layers.append(nn.ReLU())
         layers.append(nn.Linear(latent, 1))
+        #return layers
         return nn.Sequential(*layers)
 
     device = torch.device(device)
 
     X = torch.randn(n, p, device=device)
     beta = torch.randn(p, 1, device=device)
-    Y = X.matmul(beta) + torch.randn(n, 1, device=device) * 0.1
+    Y = X.matmul(beta) + torch.randn(n, 1, device=device) * 0.01
 
     # Create the network
-    net = make_network(p, latent, n_layers)
+    try:
+        net = make_network(p, latent, n_layers)
+    except Exception as e:
+        print(f"Error occurred while creating the network: {e}")
+
     net.to(device)
 
+
+    if jit:
+        net = torch.jit.script(net)
+
+    lr = 0.001
+
     # Define optimizer and loss function
-    optimizer = torch.optim.Adam(net.parameters(), lr = 0.001)
+    if optimizer == "adamw":
+        optimizer = torch.optim.AdamW(net.parameters(), lr = lr)
+    elif optimizer == "sgd":
+        optimizer = torch.optim.SGD(net.parameters(), lr = lr)
+    else:
+        raise ValueError(f"Optimizer {optimizer} not supported")
     loss_fn = nn.MSELoss()
+
 
     def get_batch(step, X, Y, batch_size):
         start_index = step * batch_size
@@ -39,9 +61,8 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed):
 
     steps = math.ceil(n / batch_size)
 
-    def train_run():
-        losses = np.zeros(epochs * steps)   
-        for epoch in range(epochs):
+    def train_run(epochs):
+        for _ in range(epochs):
             for step in range(steps):
                 x, y = get_batch(step, X, Y, batch_size)
                 optimizer.zero_grad()
@@ -49,17 +70,35 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed):
                 loss = loss_fn(y_hat, y)
                 loss.backward()
                 optimizer.step()
-                losses[epoch * steps + step] = loss.item()
-        return losses
 
 
+    train_run(epochs = 5)
+    torch.cuda.synchronize()
     t0 = time.time()
-    losses = train_run()
+    train_run(epochs = epochs)
     torch.cuda.synchronize()
     t = time.time() - t0
 
-    return {'time': t, 'losses': losses}
+    net.eval()
+
+    # evaluate the training loss without grad tracking and calculate the mean
+    mean_loss = 0
+    with torch.no_grad():
+        # iterate over the dataset
+        for step in range(steps):
+            x, y = get_batch(step, X, Y, batch_size)
+            y_hat = net(x)
+            loss = loss_fn(y_hat, y)
+            mean_loss += loss.item()
+    mean_loss /= steps
+
+    # Get peak reserved bytes
+    # for some reason we need to convert to float as otherwise we have some 
+    # type conversion issues from python -> R
+    memory = float(torch.cuda.memory_reserved())
+
+    return {'time': t, 'loss': mean_loss, 'memory': memory}
 
 
 if __name__ == "__main__":
-    print(time_pytorch(epochs=10, batch_size=32, n_layers=16, latent=100, n=2000, p=1000, device='cuda', seed=42))
+    print(time_pytorch(epochs=1, batch_size=32, n_layers=1, latent=1, n=2000, p=1000, device='cpu', seed=42, optimizer="sgd", jit = True))
