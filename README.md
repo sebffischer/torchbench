@@ -1,19 +1,11 @@
-TODOs:
+# torchbench :fire: :stopwatch:
 
-* better understand why R is slower than python:
-    * I don't think the GC is so much of a problem anymore
-    * We need to benchmark individual steps like the forward pass, backward pass and optimizer
+This repository contains various performance benchmarks for the R packages [`torch`](https://github.com/mlverse/torch) and [`mlr3torch`](https://github.com/mlr-org/mlr3torch) and compares them with [`PyTorch`](https://github.com/pytorch/pytorch).
+The goal is twofold:
 
-* benchmark for dataset
-* benchmark for dataloader
-* benchmark for optimizers 
-* create a website for this
-* run everything in a container
+1. Give users of the packages a quick overview of what to expect.
+2. Use these benchmarks to drive optimizations.
 
+To ensure reproducibility, these benchmarks will (in the future) be run in a containerized environment.
 
-Some things to pay attention to:
-
-* set number of threads for CPU.
-* synchronize the cuda streams before starting the measurement and before ending it.
-* set CUDA_VISIBLE_DEVICES if you have more than one GPU so that always the same one will be used.
-
+The results can be found on the [website](https://sebffischer.github.io/torchbench).
