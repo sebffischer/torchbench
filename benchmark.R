@@ -78,8 +78,8 @@ addAlgorithm("mlr3torch",
 )
 
 # global config:
-REPLS = 1L
-EPOCHS = 1L
+REPLS = 4L
+EPOCHS = 20L
 N = 2000L
 P = 1000L
 
@@ -167,8 +167,7 @@ problem_design = expand.grid(list(
   n          = N,
   p          = P,
   epochs = EPOCHS,
-  # factor 10 smaller than cuda
-  latent = c(1000),
+  latent = c(1000, 2500, 5000),
   optimizer = c("sgd", "adamw"),
   batch_size = 32L,
   device     = c("cpu", "cuda"),
@@ -206,8 +205,9 @@ get_result = function(ids, what) {
 summarize = function(ids = NULL) {
   jt = getJobTable() |> unwrap()
   if (!is.null(ids)) jt = jt[ids, ]
-  jt = jt[, c("n_layers", "jit", "optimizer", "batch_size", "device", "opt_type", "algorithm", "repl", "tag", "latent")]
-  jt$time = get_result(ids, "time")
+  jt = jt[, c("n_layers", "jit", "optimizer", "batch_size", "device", "opt_type", "algorithm", "repl", "tag", "latent", "epochs", "n", "p", "batch_size")]
+  jt$time_total = get_result(ids, "time")
+  jt$time_per_batch = jt$time_total / (ceiling(jt$n / jt$batch_size) * jt$epochs)
   jt$loss = get_result(ids, "loss")
   jt$memory = get_result(ids, "memory") / 2^30
   return(jt)
