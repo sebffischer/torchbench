@@ -14,6 +14,8 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed, optim
     p = int(p)
     # 2. Define a function to create the neural network
     def make_network(p, latent, n_layers):
+        if n_layers == 0:
+            return nn.Linear(p, 1)
         layers = [nn.Linear(p, latent), nn.ReLU()]
         for _ in range(n_layers - 1):
             layers.append(nn.Linear(latent, latent))
@@ -52,19 +54,14 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed, optim
     loss_fn = nn.MSELoss()
 
 
-    def get_batch(step, X, Y, batch_size):
-        start_index = step * batch_size
-        end_index = min((step + 1) * batch_size, X.size(0))  # Use X.size(0) to get the number of rows
-        x_batch = X[start_index:end_index]
-        y_batch = Y[start_index:end_index]
-        return x_batch, y_batch
+    dataset = torch.utils.data.TensorDataset(X, Y)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     steps = math.ceil(n / batch_size)
 
     def train_run(epochs):
         for _ in range(epochs):
-            for step in range(steps):
-                x, y = get_batch(step, X, Y, batch_size)
+            for (x, y) in dataloader:
                 optimizer.zero_grad()
                 y_hat = net(x)
                 loss = loss_fn(y_hat, y)
@@ -85,8 +82,7 @@ def time_pytorch(epochs, batch_size, n_layers, latent, n, p, device, seed, optim
     mean_loss = 0
     with torch.no_grad():
         # iterate over the dataset
-        for step in range(steps):
-            x, y = get_batch(step, X, Y, batch_size)
+        for (x, y) in dataloader:
             y_hat = net(x)
             loss = loss_fn(y_hat, y)
             mean_loss += loss.item()

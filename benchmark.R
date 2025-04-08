@@ -1,12 +1,12 @@
 library(batchtools)
 library(mlr3misc)
 
-if (dir.exists("~/torchbenchmark1")) {
-  unlink("~/torchbenchmark1", recursive = TRUE)
+if (dir.exists("~/torchbenchmark2")) {
+  unlink("~/torchbenchmark2", recursive = TRUE)
 }
 
 reg = makeExperimentRegistry(
-  file.dir = "~/torchbenchmark1",
+  file.dir = "~/torchbenchmark2",
   packages = c("checkmate")
 )
 
@@ -78,7 +78,7 @@ addAlgorithm("mlr3torch",
 )
 
 # global config:
-REPLS = 4L
+REPLS = 2L
 EPOCHS = 20L
 N = 2000L
 P = 1000L
@@ -94,7 +94,7 @@ problem_design = expand.grid(list(
   optimizer = c("sgd", "adamw"),
   batch_size = 32L,
   device     = "cuda",
-  n_layers = c(1L, 4L, 16L)
+  n_layers = c(2L, 4L, 6L, 8L, 10L, 12L, 14L, 16L)
 ), stringsAsFactors = FALSE)
 
 
@@ -133,7 +133,7 @@ problem_design = expand.grid(list(
   optimizer = c("sgd", "adamw"),
   batch_size = 32L,
   device     = "cpu",
-  n_layers = c(1L, 4L, 16L)
+  n_layers = c(2L, 4L, 6L, 8L, 10L, 12L, 14L, 16L)
 ), stringsAsFactors = FALSE)
 
 addExperiments(
@@ -163,36 +163,36 @@ addExperiments(
 # ignite vs non-ignite
 # here we don't need to run so many experiments, just need to show that one is clearly faster
 
-problem_design = expand.grid(list(
-  n          = N,
-  p          = P,
-  epochs = EPOCHS,
-  latent = c(1000, 2500, 5000),
-  optimizer = c("sgd", "adamw"),
-  batch_size = 32L,
-  device     = c("cpu", "cuda"),
-  n_layers = 16L
-), stringsAsFactors = FALSE)
-
-addExperiments(
-  prob.designs = list(
-    runtime_train = problem_design
-  ),
-  algo.designs = list(
-    rtorch = data.frame(
-      jit = FALSE,
-      opt_type = c("standard", "ignite"),
-      tag = "ignite_exp"
-    ),
-    mlr3torch = data.frame(
-      jit = FALSE,
-      opt_type = c("standard", "ignite"),
-      tag = "ignite_exp"
-    )
-  ),
-  repls = REPLS
-)
-
+#problem_design = expand.grid(list(
+#  n          = N,
+#  p          = P,
+#  epochs = EPOCHS,
+#  latent = c(1000, 2500, 5000),
+#  optimizer = c("sgd", "adamw"),
+#  batch_size = 32L,
+#  device     = c("cpu", "cuda"),
+#  n_layers = 16L
+#), stringsAsFactors = FALSE)
+#
+#addExperiments(
+#  prob.designs = list(
+#    runtime_train = problem_design
+#  ),
+#  algo.designs = list(
+#    rtorch = data.frame(
+#      jit = FALSE,
+#      opt_type = c("standard", "ignite"),
+#      tag = "ignite_exp"
+#    ),
+#    mlr3torch = data.frame(
+#      jit = FALSE,
+#      opt_type = c("standard", "ignite"),
+#      tag = "ignite_exp"
+#    )
+#  ),
+#  repls = REPLS
+#)
+#
 get_result = function(ids, what) {
   if (is.null(ids)) ids = findDone()[[1]]
   sapply(ids, function(i) {
@@ -205,7 +205,7 @@ get_result = function(ids, what) {
 summarize = function(ids = NULL) {
   jt = getJobTable() |> unwrap()
   if (!is.null(ids)) jt = jt[ids, ]
-  jt = jt[, c("n_layers", "jit", "optimizer", "batch_size", "device", "opt_type", "algorithm", "repl", "tag", "latent", "epochs", "n", "p", "batch_size")]
+  jt = jt[, c("n_layers", "jit", "optimizer", "batch_size", "device", "opt_type", "algorithm", "repl", "tag", "latent", "epochs", "n", "p")]
   jt$time_total = get_result(ids, "time")
   jt$time_per_batch = jt$time_total / (ceiling(jt$n / jt$batch_size) * jt$epochs)
   jt$loss = get_result(ids, "loss")

@@ -7,6 +7,7 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, device, jit, 
   lr = 0.001
 
   make_network = function(p, latent, n_layers) {
+    if (n_layers == 0) return(nn_linear(p, 1))
     layers = list(nn_linear(p, latent), nn_relu())
     for (i in seq_len(n_layers - 1)) {
         layers = c(layers, list(nn_linear(latent, latent), nn_relu()))
@@ -45,12 +46,8 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, device, jit, 
 
   steps = ceiling(n / batch_size)
 
-  get_batch = function(step, X, Y, batch_size) {
-    list(
-      x = X[seq((step - 1) * batch_size + 1, min(step * batch_size, n)), , drop = FALSE],
-      y = Y[seq((step - 1) * batch_size + 1, min(step * batch_size, n)), , drop = FALSE]
-    )
-  }
+  dataset = torch::tensor_dataset(X, Y)
+
 
   # this function should train the network for the given number of epochs and return the final training loss
   train_run = if (!mlr3torch) {
@@ -64,12 +61,18 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, device, jit, 
 
     function(epochs) {
       opt = opt_class(net_parameters, lr = lr)
+      dataloader = torch::dataloader(dataset, batch_size = batch_size, shuffle = FALSE)
+      t0 = Sys.time()
       for (epoch in seq(epochs)) {
-        for (step in seq_len(steps)) {
-          batch = get_batch(step, X, Y, batch_size)
-          do_step(batch$x, batch$y, opt)
+        step = 0
+        iter = dataloader_make_iter(dataloader)
+        while (step < length(dataloader)) {
+          batch = dataloader_next(iter)
+          do_step(batch[[1]], batch[[2]], opt)
+          step = step + 1
         }
       }
+      as.numeric(difftime(Sys.time(), t0, units = "secs"))
     }
 
   } else {
@@ -94,10 +97,28 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, device, jit, 
       y = as.numeric(Y)
     ), target = "y")
 
+    timer = torch_callback("timer",
+      on_begin = function() {
+        self$t0 = Sys.time()
+      },
+      on_end = function() {
+        self$t1 = Sys.time()
+      },
+      state_dict = function() {
+        c(self$t0, self$t1)
+      },
+      load_state_dict = function(state_dict) {
+        NULL # not needed here
+      }
+    )
+
+
     function(epochs) {
       learner$.__enclos_env__$private$.network_stored = net
-      learner$configure(epochs = epochs)
+      learner$configure(epochs = epochs, callbacks = timer)
       learner$train(task)
+      ts = learner$model$callbacks$timer
+      as.numeric(difftime(ts[2], ts[1], units = "secs"))
     }
     
   }
@@ -106,12 +127,12 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, device, jit, 
       #net$eval()
       mean_loss = 0
       with_no_grad({
-        for (step in seq_len(steps)) {
-          batch = get_batch(step, X, Y, batch_size)
-          y_hat = net(batch$x)
-          loss = loss_fn(y_hat, batch$y)
+        dataloader = torch::dataloader(dataset, batch_size = batch_size, shuffle = FALSE)
+        coro::loop(for (batch in dataloader) {
+          y_hat = net(batch[[1]])
+          loss = loss_fn(y_hat, batch[[2]])
           mean_loss = mean_loss + loss$item()
-        }
+        })
       })
       mean_loss / steps
   }
@@ -120,14 +141,12 @@ time_rtorch = function(epochs, batch_size, n_layers, latent, n, p, device, jit, 
 
   cuda_synchronize()
   #gc.time(TRUE)
-  t0 = Sys.time()
-  train_run(epochs)
+  time = train_run(epochs)
   cuda_synchronize()
   #gc_time = gc.time()[3]
-  t = as.numeric(difftime(Sys.time(), t0, units = "secs"))
 
   stats = cuda_memory_stats()
   memory = stats$reserved_bytes$all$current
 
-  list(time = t, loss = eval_run(), memory = memory)
+  list(time = time, loss = eval_run(), memory = memory)
 }
